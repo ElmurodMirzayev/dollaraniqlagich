@@ -1,97 +1,111 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
-st.set_page_config(
-    page_title="USD → UZS Sotib olish / Sotish",
-    layout="wide"
-)
+st.set_page_config(layout="wide")
+st.title("USD → UZS Forecast va BUY/SELL")
 
-st.title("💱 USD → UZS Sotib olish / Sotish ва Прогноз")
+# ===== Modelarni yuklash (agar mavjud bo'lsa) =====
+model_reg = None
+model_clf = None
+try:
+    model_reg = joblib.load("usduzs.pkl")
+except Exception as e:
+    st.warning("Model 'usduzs.pkl' topilmadi yoki yuklab bo'lmadi (prognoz uchun).")
 
-# ===============================
-# Модель ва маълумотларни юклаш
-# ===============================
-@st.cache_resource
-def load_model():
-    return joblib.load("usduzs_buysell.pkl")
+try:
+    model_clf = joblib.load("usduzs_buysell.pkl")
+except Exception:
+    # ba'zi foydalanuvchilar faqat bitta model nomi bilan ishlaydi — shuning uchun ogohlantirish beramiz
+    st.info("Agar BUY/SELL klassifikatori kerak bo'lsa, 'usduzs_buysell.pkl' nomli modelni joylang.")
 
-@st.cache_data
-def load_data():
+# ===== CSV yuklash =====
+try:
     df = pd.read_csv("USD_UZS_data.csv")
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date').reset_index(drop=True)
-    return df
+except Exception as e:
+    st.error("CSV fayl 'USD_UZS_data.csv' topilmadi yoki uni o'qib bo'lmadi. Iltimos fayl mavjudligini tekshiring.")
+    st.stop()
 
-model = load_model()
-df = load_data()
-
-st.success("Модель ва маълумотлар юкланди ✅")
-
-st.subheader("📊 Охирги маълумотлар")
+st.subheader("So'nggi ma'lumotlar")
 st.dataframe(df.tail())
 
-# ===============================
-# Ён панель — режим танлаш
-# ===============================
-mode = st.sidebar.radio(
-    "Режимни танланг",
-    ["📌 Бир кунлик BUY / SELL", "📈 Бир неча кунлик прогноз"]
+# ===== Mode tanlash =====
+mode = st.radio(
+    "Rejimni tanlang:",
+    ("📌 Bir kunlik BUY / SELL", "🔮 Bir nechta kunlik prognoz")
 )
 
-# =====================================================
-# 🔹 1-РЕЖИМ: Бир кунлик BUY / SELL
-# =====================================================
-if mode == "📌 Бир кунлик BUY / SELL":
+# ===== Helper funktsiyalar =====
 
-    st.subheader("📥 Кунлик маълумотларни киритинг")
+def safe_iloc(df, idx, default=None):
+    try:
+        return df.iloc[idx]
+    except Exception:
+        return default
+
+# ===== Bir kunlik BUY / SELL rejimi =====
+if mode == "📌 Bir kunlik BUY / SELL":
+
+    st.subheader("📥 Kunlik ma'lumotlarni kiriting")
 
     yesterday_close_str = st.text_input(
-        "Кечаги USD/UZS курси",
-        value=f"{df['close'].iloc[-1]:.2f}"
+        "Kecha USD/UZS kursi", value=f"{df['close'].iloc[-1]:.2f}"
     )
 
     today_close_str = st.text_input(
-        "Бугунги USD/UZS курси",
-        value=f"{df['close'].iloc[-1]:.2f}"
+        "Bugun USD/UZS kursi", value=f"{df['close'].iloc[-1]:.2f}"
     )
 
     dayofweek = st.selectbox(
-        "Ҳафта куни",
+        "Hafta kuni",
         [
-            (0, "Душанба"),
-            (1, "Сешанба"),
-            (2, "Чоршанба"),
-            (3, "Пайшанба"),
-            (4, "Жума"),
-            (5, "Шанба"),
-            (6, "Якшанба")
+            (0, "Dushanba"),
+            (1, "Seshanba"),
+            (2, "Chorshanba"),
+            (3, "Payshanba"),
+            (4, "Juma"),
+            (5, "Shanba"),
+            (6, "Yakshanba")
         ],
         format_func=lambda x: x[1]
     )[0]
 
     month = st.selectbox(
-        "Ой",
+        "Oy",
         list(range(1, 13)),
         index=df['date'].iloc[-1].month - 1
     )
 
-    if st.button("🔮 BUY / SELL аниқлаш"):
+    if st.button("🔮 BUY / SELL aniqlash"):
         try:
             yesterday_close = float(yesterday_close_str.replace(",", "."))
             today_close = float(today_close_str.replace(",", "."))
         except ValueError:
-            st.error("❌ Илтимос, тўғри сон киритинг (масалан: 12200.30)")
+            st.error("❌ Iltimos, to'g'ri son kiriting (masalan: 12200.30)")
         else:
             if yesterday_close == 0:
-                st.error("❌ Кечаги курс 0 бўлиши мумкин эмас")
+                st.error("❌ Kechagi kurs 0 bo'lishi mumkin emas")
             else:
                 change = (today_close - yesterday_close) / yesterday_close * 100
 
-                close_lag7 = df['close'].iloc[-7]
-                close_ma7 = df['close'].iloc[-7:].mean()
-                change_lag1 = df['change'].iloc[-1]
+                # xavfsiz 7 kun oldingi qiymatlarni olish
+                try:
+                    close_lag7 = df['close'].iloc[-7]
+                except Exception:
+                    close_lag7 = df['close'].iloc[-1]
+
+                try:
+                    close_ma7 = df['close'].iloc[-7:].mean()
+                except Exception:
+                    close_ma7 = df['close'].iloc[-1]
+
+                try:
+                    change_lag1 = df['change'].iloc[-1]
+                except Exception:
+                    change_lag1 = 0.0
 
                 my_data = pd.DataFrame([{
                     'close_lag1': yesterday_close,
@@ -103,89 +117,114 @@ if mode == "📌 Бир кунлик BUY / SELL":
                     'month': month
                 }])
 
-                with st.expander("📌 Модельга юборилган маълумотлар"):
+                with st.expander("📌 Modelga yuborilgan ma'lumotlar"):
                     st.write(my_data.T)
 
-                prediction = model.predict(my_data)[0]
-
-                if prediction == 1:
-                    st.success("🟢 ТАВСИЯ: **BUY (Сотиб олиш)**")
+                if model_clf is None:
+                    st.error("🔴 BUY/SELL klassifikatori yuklanmagan. 'usduzs_buysell.pkl' faylini joylang.")
                 else:
-                    st.error("🔴 ТАВСИЯ: **SELL (Сотиш)**")
+                    try:
+                        prediction = model_clf.predict(my_data)[0]
+                        if int(prediction) == 1:
+                            st.success("🟢 TAVSIYA: **BUY (Sotib olish)**")
+                        else:
+                            st.error("🔴 TAVSIYA: **SELL (Sotish)**")
+                    except Exception as e:
+                        st.error(f"Model bilan bashorat qilishda xatolik: {e}")
 
-                st.info(f"📊 Ҳисобланган ўзгариш (change): **{change:.4f}%**")
+                st.info(f"📊 Hisoblangan oʻzgarish (change): **{change:.4f}%**")
 
-# =====================================================
-# 🔹 2-РЕЖИМ: Бир неча кунлик прогноз
-# =====================================================
+# ===== Bir nechta kunlik prognoz rejimi =====
 else:
+    st.subheader("📈 Bir nechta kunlik prognoz")
 
-    st.subheader("📅 Прогноз параметрлари")
+    days = st.number_input("Necha kun prognoz qilinsin", 1, 365, 7)
 
-    days = st.number_input(
-        "Неча кунга прогноз қилиш керак?",
-        min_value=1,
-        max_value=30,
-        value=7
-    )
+    def add_new_row(df_local, predicted_close):
+        df_local = df_local.copy()
 
-    def add_new_row(df, direction):
-        df = df.copy()
-        last_close = df['close'].iloc[-1]
-        step = last_close * 0.001  # 0.1%
+        new_date = df_local['date'].iloc[-1] + pd.Timedelta(days=1)
+        last_close = df_local['close'].iloc[-1]
+        new_change = predicted_close - last_close
 
-        predicted_close = (
-            last_close + step if direction == 1 else last_close - step
-        )
+        # xavfsizlagan holda -7 uchun qiymatlar
+        try:
+            close_lag7_val = df_local['close'].iloc[-7]
+        except Exception:
+            close_lag7_val = df_local['close'].iloc[-1]
+
+        try:
+            close_ma7_val = df_local['close'].iloc[-7:].mean()
+        except Exception:
+            close_ma7_val = df_local['close'].iloc[-1]
+
+        try:
+            change_lag1_val = df_local['change'].iloc[-1]
+        except Exception:
+            change_lag1_val = 0.0
 
         new_row = {
-            'date': df['date'].iloc[-1] + pd.Timedelta(days=1),
+            'date': new_date,
             'close': predicted_close,
-            'change': (predicted_close - last_close) / last_close * 100
+            'change': new_change,
+            'close_lag1': last_close,
+            'close_lag7': close_lag7_val,
+            'close_ma7': close_ma7_val,
+            'change_lag1': change_lag1_val
         }
 
-        return pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+        return pd.concat([df_local, pd.DataFrame([new_row])], ignore_index=True)
 
-    def predict_days(df, model, days):
-        df = df.copy()
-
-        for _ in range(days):
-            my_data = pd.DataFrame([{
-                'close_lag1': df['close'].iloc[-1],
-                'close_lag7': df['close'].iloc[-7],
-                'close_ma7': df['close'].iloc[-7:].mean(),
-                'change_lag1': df['change'].iloc[-1],
-                'change': df['change'].iloc[-1],
-                'dayofweek': df['date'].iloc[-1].dayofweek,
-                'month': df['date'].iloc[-1].month
+    def predict_by_day(df_input, model, days_count):
+        df_work = df_input.copy()
+        for i in range(days_count):
+            my_date = pd.DataFrame([{
+                'close_lag1': df_work['close'].iloc[-1],
+                'close_lag7': df_work['close'].iloc[-7] if len(df_work) >= 7 else df_work['close'].iloc[-1],
+                'close_ma7': df_work['close'].iloc[-7:].mean() if len(df_work) >= 7 else df_work['close'].iloc[-1],
+                'change_lag1': df_work['change'].iloc[-1] if 'change' in df_work.columns else 0.0
             }])
 
-            direction = model.predict(my_data)[0]
-            df = add_new_row(df, direction)
+            # model_reg kutilyapti — u regressiya bo'lib, yopiq narxni (predicted_close) beradi
+            if model is None:
+                raise RuntimeError("Prognoz modeli yuklanmagan. 'usduzs.pkl' faylini joylang.")
 
-        return df
+            predicted_close = model.predict(my_date)[0]
 
-    if st.button("📈 Прогноз қилиш"):
-        result_df = predict_days(df, model, days)
+            # agar model int yoki klass qaytarsa, uni floatga o'tkazishga harakat qilamiz
+            try:
+                predicted_close = float(predicted_close)
+            except Exception:
+                # agar qiymat floatga o'tmasa, fallback sifatida oxirgi close + 0
+                predicted_close = float(df_work['close'].iloc[-1])
 
-        last_real_date = df['date'].iloc[-1]
-        history = result_df[result_df['date'] <= last_real_date]
-        forecast = result_df[result_df['date'] > last_real_date]
+            df_work = add_new_row(df_work, predicted_close)
 
-        st.subheader("📉 График")
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=history['date'],
-            y=history['close'],
-            name="Тарих"
-        ))
-        fig.add_trace(go.Scatter(
-            x=forecast['date'],
-            y=forecast['close'],
-            name="Прогноз"
-        ))
+        return df_work
 
-        st.plotly_chart(fig, use_container_width=True)
+    if st.button("Sdelat prognoz"):
+        try:
+            result_df = predict_by_day(df, model_reg, int(days))
 
-        st.subheader("📄 Прогноз жадвали")
-        st.dataframe(forecast.reset_index(drop=True))
+            last_real_date = df['date'].iloc[-1]
+
+            new_data = result_df[result_df['date'] >= last_real_date]
+            old_data = result_df[(result_df['date'] > last_real_date - pd.Timedelta(days=200)) & (result_df['date'] <= last_real_date)]
+
+            st.subheader("Grafik")
+
+            fig, ax = plt.subplots()
+
+            ax.plot(old_data['date'], old_data['close'], label="Tarixiy ma'lumotlar")
+            ax.plot(new_data['date'], new_data['close'], label="Prognoz")
+
+            plt.xticks(rotation=45)
+            plt.legend()
+
+            st.pyplot(fig)
+
+            st.subheader("Prognozlar jadvali")
+            st.dataframe(result_df.tail(days))
+
+        except Exception as e:
+            st.error(f"Prognoz qilishda xatolik: {e}")
