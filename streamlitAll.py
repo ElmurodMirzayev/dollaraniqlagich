@@ -127,8 +127,10 @@ if mode == "📌 Bir kunlik BUY / SELL":
                         prediction = model_clf.predict(my_data)[0]
                         if int(prediction) == 1:
                             st.success("🟢 TAVSIYA: **BUY (Sotib olish)**")
+                            st.success("**Narx 4 kun ichida o'sadi**")
                         else:
                             st.error("🔴 TAVSIYA: **SELL (Sotish)**")
+                            st.success("**Narx 4 kun ichida kamayadi**")
                     except Exception as e:
                         st.error(f"Model bilan bashorat qilishda xatolik: {e}")
 
