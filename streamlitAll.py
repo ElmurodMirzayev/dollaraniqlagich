@@ -35,7 +35,7 @@ st.dataframe(df.tail())
 # ===== Mode tanlash =====
 mode = st.radio(
     "Rejimni tanlang:",
-    ("📌 Bir kunlik BUY / SELL", "🔮 Bir nechta kunlik prognoz")
+    (" Bir kunlik BUY / SELL", " Bir nechta kunlik prognoz")
 )
 
 # ===== Helper funktsiyalar =====
@@ -47,9 +47,9 @@ def safe_iloc(df, idx, default=None):
         return default
 
 # ===== Bir kunlik BUY / SELL rejimi =====
-if mode == "📌 Bir kunlik BUY / SELL":
+if mode == " Bir kunlik BUY / SELL":
 
-    st.subheader("📥 Kunlik ma'lumotlarni kiriting")
+    st.subheader(" Kunlik ma'lumotlarni kiriting")
 
     yesterday_close_str = st.text_input(
         "Kecha USD/UZS kursi", value=f"{df['close'].iloc[-1]:.2f}"
@@ -79,7 +79,7 @@ if mode == "📌 Bir kunlik BUY / SELL":
         index=df['date'].iloc[-1].month - 1
     )
 
-    if st.button("🔮 BUY / SELL aniqlash"):
+    if st.button(" BUY / SELL aniqlash"):
         try:
             yesterday_close = float(yesterday_close_str.replace(",", "."))
             today_close = float(today_close_str.replace(",", "."))
@@ -117,7 +117,7 @@ if mode == "📌 Bir kunlik BUY / SELL":
                     'month': month
                 }])
 
-                with st.expander("📌 Modelga yuborilgan ma'lumotlar"):
+                with st.expander(" Modelga yuborilgan ma'lumotlar"):
                     st.write(my_data.T)
 
                 if model_clf is None:
@@ -134,11 +134,11 @@ if mode == "📌 Bir kunlik BUY / SELL":
                     except Exception as e:
                         st.error(f"Model bilan bashorat qilishda xatolik: {e}")
 
-                st.info(f"📊 Hisoblangan oʻzgarish (change): **{change:.4f}%**")
+                st.info(f" Hisoblangan oʻzgarish (change): **{change:.4f}%**")
 
 # ===== Bir nechta kunlik prognoz rejimi =====
 else:
-    st.subheader("📈 Bir nechta kunlik prognoz")
+    st.subheader(" Bir nechta kunlik prognoz")
 
     days = st.number_input("Necha kun prognoz qilinsin", 1, 365, 7)
 
